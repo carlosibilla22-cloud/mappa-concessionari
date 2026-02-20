@@ -848,5 +848,44 @@ if ("serviceWorker" in navigator) {
 }
 </script>
 
+
+<script>
+// --- TESLA MODE AUTO UPDATE ---
+// Controlla ogni 60s se index.html è cambiato e ricarica automaticamente
+(async function(){
+  let lastHash = null;
+
+  async function checkUpdate(){
+    try{
+      const res = await fetch("./index.html?ts=" + Date.now(), {cache:"no-store"});
+      const text = await res.text();
+
+      // hash veloce
+      const hash = await crypto.subtle.digest("SHA-256",
+        new TextEncoder().encode(text));
+
+      const hex = Array.from(new Uint8Array(hash))
+        .map(b=>b.toString(16).padStart(2,"0"))
+        .join("");
+
+      if(lastHash && lastHash !== hex){
+        console.log("Nuova versione trovata → reload");
+        location.reload(true);
+      }
+
+      lastHash = hex;
+
+    }catch(e){}
+  }
+
+  // primo check dopo apertura
+  setTimeout(checkUpdate,4000);
+
+  // poi ogni 60 secondi
+  setInterval(checkUpdate,60000);
+
+})();
+</script>
+
 </body>
 </html>
