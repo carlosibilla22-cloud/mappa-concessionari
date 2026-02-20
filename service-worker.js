@@ -1,58 +1,67 @@
-const CACHE_NAME = "concessionari-pwa-v1";
-const APP_SHELL = [
-  "./",
-  "./index.html",
-  "./manifest.json",
-  "./service-worker.js",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/apple-touch-icon-180.png",
-  // CDN (best-effort)
-  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
-  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
-  // Confini regioni (best-effort)
-  "https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson"
-];
+const CACHE_NAME = "concessionari-ninja";
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      // addAll può fallire se qualche risorsa cross-origin non è raggiungibile: quindi facciamo best-effort
-      for (const url of APP_SHELL) {
-        try { await cache.add(url); } catch (e) {}
-      }
-    })
-  );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
+    await self.clients.claim();
+
+    // avvisa le pagine che c'è un SW attivo
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of clients) c.postMessage({ type: "SW_ACTIVE" });
+  })());
 });
+
+// network-first (sempre l'ultima versione, fallback offline)
+async function networkFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const fresh = await fetch(request, { cache: "no-store" });
+    if (fresh && fresh.ok) cache.put(request, fresh.clone());
+    return fresh;
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    throw new Error("offline");
+  }
+}
+
+// stale-while-revalidate per asset (veloce + si aggiorna da solo)
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+  const fetchPromise = fetch(request).then((fresh) => {
+    if (fresh && fresh.ok) cache.put(request, fresh.clone());
+    return fresh;
+  }).catch(() => null);
+  return cached || fetchPromise;
+}
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  // Network-first per tile OSM (così non riempiamo cache)
-  if (req.url.includes("tile.openstreetmap.org")) {
+  const url = new URL(req.url);
+
+  // NON cachiamo le tile OSM (troppo pesanti)
+  if (url.hostname.includes("tile.openstreetmap.org")) return;
+
+  // Navigazione: prendi sempre l'ultima index.html
+  if (req.mode === "navigate") {
+    event.respondWith(networkFirst("./index.html"));
     return;
   }
 
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((resp) => {
-        // cache solo GET e solo se ok
-        if (req.method === "GET" && resp && resp.ok) {
-          const copy = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy)).catch(()=>{});
-        }
-        return resp;
-      }).catch(() => cached);
-    })
-  );
+  // Anche se qualcuno chiede index.html direttamente:
+  if (url.pathname.endsWith("/index.html")) {
+    event.respondWith(networkFirst(req));
+    return;
+  }
+
+  // Il resto: veloce e si aggiorna in background
+  if (req.method === "GET") {
+    event.respondWith(staleWhileRevalidate(req));
+  }
 });
