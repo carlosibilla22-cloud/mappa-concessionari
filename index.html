@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8"/>
+<title>Mappa concessionari</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --bg:#0b1220;
+  --border:rgba(255,255,255,.12);
+  --text:#e7eefc;
+  --chip:rgba(255,255,255,.10);
+}
+html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+#wrap{display:flex;height:100%;}
+#sidebar{width:360px;max-width:48vw;background:linear-gradient(180deg,var(--bg),#0a1020);
+  padding:14px 12px;box-sizing:border-box;overflow:auto;border-right:1px solid var(--border);}
+#map{flex:1;}
+h1{font-size:16px;margin:0 0 10px 0;font-weight:800;letter-spacing:.2px;}
+h2{font-size:13px;margin:14px 0 8px 0;font-weight:800;opacity:.95;}
+label{display:block;font-size:12px;opacity:.9;margin:10px 0 6px;}
+input,select,button,textarea{font:inherit;}
+input,select,textarea{width:100%;padding:10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);outline:none;}
+select option{color:#111;}
+textarea{min-height:70px;resize:vertical;}
+.row{display:flex;gap:10px;}
+.row > div{flex:1;}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:stretch;}
+.btnrow button{flex:1 1 auto;min-width:160px;}
+button{padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.08);color:var(--text);cursor:pointer;}
+button:hover{background:rgba(255,255,255,.12);}
+button.primary{background:rgba(43,124,255,.22);border-color:rgba(43,124,255,.35);}
+button.primary:hover{background:rgba(43,124,255,.30);}
+button.danger{background:rgba(229,80,57,.20);border-color:rgba(229,80,57,.35);}
+button.danger:hover{background:rgba(229,80,57,.28);}
+.tabs{display:flex;gap:8px;margin:10px 0 12px 0;}
+.tab{flex:1;text-align:center;padding:10px 0;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.06);cursor:pointer;font-weight:700;font-size:12px;opacity:.9;}
+.tab.active{background:rgba(255,255,255,.10);opacity:1;}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--chip);margin-left:6px;font-size:12px;}
+.hr{height:1px;background:var(--border);margin:12px 0;}
+.small{font-size:12px;opacity:.82;line-height:1.35;}
+.popup-title{font-weight:900;font-size:15px;margin-bottom:6px;}
+.visit-item{border:1px solid var(--border);background:rgba(255,255,255,.05);border-radius:14px;padding:10px;margin:8px 0;}
+.visit-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;}
+.visit-title{font-weight:900;font-size:13px;line-height:1.2;}
+.chip{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--chip);font-size:11px;margin-top:6px;}
+.legend{display:grid;grid-template-columns:16px 1fr;gap:8px;align-items:center;margin-top:8px;}
+.swatch{width:16px;height:16px;border-radius:6px;border:1px solid rgba(255,255,255,.25);}
+#sharedStatus{word-break:break-word;line-height:1.35;}
+.dash{border:1px solid var(--border);background:rgba(255,255,255,.05);border-radius:14px;padding:10px;margin-top:12px;}
+.dash h3{margin:0 0 8px 0;font-size:12px;font-weight:900;opacity:.95;}
+.dashlist{display:flex;flex-direction:column;gap:6px;}
+.dashitem{display:flex;justify-content:space-between;gap:10px;align-items:center;
+  padding:8px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);cursor:pointer;}
+.dashitem:hover{background:rgba(255,255,255,.08);}
+.dashname{font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dashmeta{font-size:11px;opacity:.80;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dashcount{font-weight:900;font-size:12px;background:rgba(255,255,255,.10);padding:4px 10px;border-radius:999px;}
+</style>
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<meta name="theme-color" content="#2b7cff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Concessionari">
+
+</head>
+<body>
+<div id="wrap">
+  <div id="sidebar">
+    <h1>Mappa concessionari <span class="badge" id="count">0</span></h1>
+
+    <div class="tabs">
+      <div class="tab active" id="tabMap">Mappa</div>
+      <div class="tab" id="tabVisits">Visite</div>
+    </div>
+
+    <div id="panelMap">
+      <label for="q">Cerca (nome / città)</label>
+      <input id="q" placeholder="Es. Milano, Rossi, ..."/>
+
+      <div class="row">
+        <div>
+          <label for="reg">Regione</label>
+          <select id="reg"><option value="">Tutte</option></select>
+        </div>
+        <div>
+          <label for="prov">Provincia</label>
+          <select id="prov"><option value="">Tutte</option></select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label> </label>
+          <button id="onlyViewBtn" title="Mostra solo i punti dentro la vista attuale">Solo in vista: OFF</button>
+        </div>
+        <div>
+          <label> </label>
+          <button id="bordersBtn" title="(Non disponibile in questa build)">Confini regioni: OFF</button>
+        </div>
+      </div>
+
+      <h2>Colori marker (visite totali per città)</h2>
+      <div class="small">
+        Il colore del marker indica quante visite hai registrato nella <b>città</b> del concessionario.
+      </div>
+
+      <div class="legend">
+        <div class="swatch" style="background:#9aa0a6"></div><div class="small"><b>0</b> → grigio</div>
+        <div class="swatch" style="background:#66bb6a"></div><div class="small"><b>1</b> → verde</div>
+        <div class="swatch" style="background:#f6e58d"></div><div class="small"><b>2</b> → giallo</div>
+        <div class="swatch" style="background:#f8c291"></div><div class="small"><b>3</b> → arancio</div>
+        <div class="swatch" style="background:#e55039"></div><div class="small"><b>&gt;3</b> → rosso</div>
+      </div>
+
+      <div class="dash">
+        <h3>🔥 Top visitate</h3>
+        <div class="dashlist" id="topVisited"></div>
+      </div>
+
+      <div class="dash">
+        <h3>⚠️ Da visitare</h3>
+        <div class="small" style="margin:-2px 0 8px 0;">Città con concessionari ma <b>0 visite</b>.</div>
+        <div class="dashlist" id="toVisit"></div>
+      </div>
+
+      <div class="hr"></div>
+      <div class="small">
+        Suggerimento: clicca un concessionario e usa <b>Pianifica visita</b> dal popup.
+        <br/>Basemap: OpenStreetMap (serve Internet per lo sfondo).
+      </div>
+    </div>
+
+    <div id="panelVisits" style="display:none;">
+      <h2>Aggiungi visita</h2>
+
+      <label for="dealerPick">Concessionario</label>
+      <input id="dealerPick" list="dealersList" placeholder="Inizia a scrivere nome o città..."/>
+      <datalist id="dealersList"></datalist>
+
+      <div class="row">
+        <div>
+          <label for="visitDate">Data</label>
+          <input id="visitDate" type="date"/>
+        </div>
+        <div>
+          <label for="visitTime">Ora (opz.)</label>
+          <input id="visitTime" type="time"/>
+        </div>
+      </div>
+
+      <label for="visitNote">Note (opz.)</label>
+      <textarea id="visitNote" placeholder="Es. obiettivi, persone incontrate..."></textarea>
+
+      <div class="btnrow">
+        <button class="primary" id="addVisitBtn">Salva visita</button>
+        <button id="clearVisitsBtn" class="danger" title="Cancella tutte le visite dal browser">Svuota</button>
+      </div>
+
+      <div class="btnrow">
+        <button id="exportBtn" title="Scarica un file .json di backup">Esporta</button>
+        <button id="importBtn" title="Importa un file .json salvato in precedenza">Importa</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none;"/>
+      </div>
+
+      <div class="btnrow" style="margin-top:12px;">
+        <button id="connectSharedBtn" class="primary" title="Scegli una cartella condivisa (OneDrive/Dropbox/rete) e usa visite.json come archivio comune">Connetti cartella condivisa</button>
+        <button id="disconnectSharedBtn" title="Torna alla modalità locale (solo questo browser)" style="display:none;">Disconnetti</button>
+      </div>
+      <div class="small" id="sharedStatus" style="margin-top:8px;">
+        Modalità: <b>Locale</b> (le visite restano in questo browser). Usa “Connetti cartella condivisa” per condividere un file <code>visite.json</code>.
+      </div>
+
+      <div class="hr"></div>
+      <h2>Elenco visite</h2>
+      <div class="small" id="visitStats"></div>
+      <div id="visitsList"></div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+const DEALERS = [{"id":"d1","name":"ALGIERI AUTO Srl","address":"Via Marco Polo, 2- C.da Lecco","city":"RENDE","province":"CS","region":"CALABRIA","phone":"0984 40 19 07","lat":39.33154,"lon":16.18145},{"id":"d2","name":"AMBROSI SpA","address":"Via dell'Industria snc","city":"VITERBO","province":"VT","region":"LAZIO","phone":"0761 25 07 72","lat":42.44112,"lon":12.09273},{"id":"d3","name":"ASCA MOTOR Srl","address":"Via L. Luzzaschi 9/11","city":"FERRARA","province":"FE","region":"EMILIA ROMAGNA","phone":"0532 90 92 40","lat":44.81206,"lon":11.59025},{"id":"d4","name":"AUTO PRIMA Srl","address":"SS 87 Km 20+600","city":"MARCIANISE","province":"CE","region":"CAMPANIA","phone":"0823 84 02 25","lat":41.01981,"lon":14.32717},{"id":"d5","name":"AUTOCENTER Srl","address":"Via Roma 68/f","city":"CASTEL D'ARIO","province":"MN","region":"LOMBARDIA","phone":"0376 66 58 81","lat":45.19667,"lon":10.95843},{"id":"d6","name":"AUTOFAMAR Srl","address":"Via Antonio Lombardi 1/1A","city":"CATANZARO","province":"CZ","region":"CALABRIA","phone":"0961 77 02 58","lat":38.90306,"lon":16.58096},{"id":"d7","name":"AUTONOVARA Srl","address":"Via Pontiggia, 12","city":"SEREGNO","province":"MB","region":"LOMBARDIA","phone":"0362 22 29 12","lat":45.64016,"lon":9.21734},{"id":"d8","name":"AUTOPIU' SpA","address":"Via Maestri del Lavoro, 31","city":"FIUME VENETO","province":"PN","region":"FRIULI   V.G.","phone":"0434 95 79 70","lat":45.9432,"lon":12.71553},{"id":"d9","name":"AUTOPIU' SpA","address":"Via Nazionale, 39","city":"TAVAGNACCO","province":"UD","region":"FRIULI   V.G.","phone":"0432 64 00 52","lat":46.10399,"lon":13.22928},{"id":"d10","name":"AUTORALLY Srl","address":"Via E. Gianturco, 109","city":"NAPOLI","province":"NA","region":"CAMPANIA","phone":"081 73 40 614","lat":40.8541,"lon":14.28852},{"id":"d11","name":"AUTOSALONE INTERNAZIONALE Srl","address":"Viale Giuseppe Borri, 50","city":"CASTELLANZA","province":"VA","region":"LOMBARDIA","phone":"0331 62 05 58","lat":45.60502,"lon":8.87394},{"id":"d12","name":"AUTOSERENISSIMA Srl","address":"Via Uruguay, 27","city":"PADOVA","province":"PD","region":"VENETO","phone":"049 78 00 567","lat":45.3979,"lon":11.92754},{"id":"d13","name":"AUTOSERENISSIMA Srl","address":"Via Orlanda, 45","city":"VENEZIA","province":"VE","region":"VENETO","phone":"041 90 00 86","lat":45.48447,"lon":12.28268},{"id":"d14","name":"AUTOSERENISSIMA Srl","address":"Via Torricelli, 42/a","city":"VERONA","province":"VR","region":"VENETO","phone":"045 95 66 33","lat":45.40391,"lon":10.97083},{"id":"d15","name":"AUTOSERENISSIMA Srl","address":"Viale del Lavoro, 37","city":"VICENZA","province":"VI","region":"VENETO","phone":"0444 56 35 88","lat":45.52606,"lon":11.51338},{"id":"d16","name":"AUTOSTAR FLAMINIA SpA","address":"Via Flaminia, 1113","city":"ROMA","province":"RM","region":"LAZIO","phone":"06 33 23 51","lat":41.98407,"lon":12.49315},{"id":"d17","name":"B & C Srl","address":"Via Zircone, 1","city":"GROSSETO","province":"GR","region":"TOSCANA","phone":"0564 45 88 72","lat":42.79354,"lon":11.08842},{"id":"d18","name":"BIANCHESSI AUTO Srl","address":"Via Giacomo Marenghi, 2","city":"CASTELVERDE","province":"CR","region":"LOMBARDIA","phone":"0372 44 41 87","lat":45.18987,"lon":9.99674},{"id":"d19","name":"BIAUTO CLUB Srl","address":"C.so Orbassano 452","city":"TORINO","province":"TO","region":"PIEMONTE","phone":"011 04 10 410","lat":45.03971,"lon":7.63333},{"id":"d20","name":"BISELLI Srl","address":"Via Angelo Morettini, 41","city":"PERUGIA","province":"PG","region":"UMBRIA","phone":"075 50 10 989","lat":43.08768,"lon":12.36518},{"id":"d21","name":"BODEMA Srl","address":"Via Epitaffio, 39","city":"LATINA","province":"LT","region":"LAZIO","phone":"0773 69 67 17","lat":41.47799,"lon":12.91088},{"id":"d22","name":"BOLIDEA SpA","address":"Via della Nunziata, 2","city":"SAVONA","province":"SV","region":"LIGURIA","phone":"019 23 02 091","lat":44.30266,"lon":8.45644},{"id":"d23","name":"BOLOGNA PREMIUM Srl","address":"Via Isonzo, 16","city":"CASALECCHIO DI RENO","province":"BO","region":"EMILIA ROMAGNA","phone":"051 61 13 301","lat":44.48595,"lon":11.27842},{"id":"d24","name":"BRESCIA MOTORI Srl","address":"Via Orzinuovi,38/40","city":"BRESCIA","province":"BS","region":"LOMBARDIA","phone":"0304077010","lat":45.52863,"lon":10.19157},{"id":"d25","name":"BROKAR Srl","address":"Via Giorgio Sonnino Sidney, 3","city":"MISTERBIANCO","province":"CT","region":"SICILIA","phone":"095 16 95 42 01","lat":37.51401,"lon":15.03102},{"id":"d26","name":"CLERICI AUTO SpA","address":"Via Statale Briantea-ang. V. Urago, 11","city":"TAVERNERIO","province":"CO","region":"LOMBARDIA","phone":"031 42 81 11","lat":45.79406,"lon":9.1508},{"id":"d27","name":"D.M.J. Srl","address":"Via Pertusillo ang. Via Prov. Per Lecce","city":"BRINDISI","province":"BR","region":"PUGLIA","phone":"0831 56 40 44","lat":40.61994,"lon":17.95011},{"id":"d28","name":"DAMILANO EXPERIENCE CAR Srl","address":"Via Torino, 178","city":"CUNEO","province":"CN","region":"PIEMONTE","phone":"0171 41 10 11","lat":44.41756,"lon":7.55553},{"id":"d29","name":"DE BONA srl","address":"Via Galvani, 3/E","city":"BOLZANO","province":"BZ","region":"TRENTINO A/A","phone":"0471 06 35 35","lat":46.47462,"lon":11.3321},{"id":"d30","name":"DI.BA. SpA","address":"Via del Casone snc","city":"Civitanova Marche","province":"MC","region":"MARCHE","phone":"0733/1680411","lat":43.29979,"lon":13.70923},{"id":"d31","name":"DPR S.R.L.","address":"Via Turati, 13","city":"S.MARTINO SICCOMARIO","province":"PV","region":"LOMBARDIA","phone":"0382 55 63 19","lat":45.13099,"lon":9.11956},{"id":"d32","name":"DREAM LAND Srl","address":"Via A. Volta snc","city":"AGLIANA","province":"PT","region":"TOSCANA","phone":"0574 32 447","lat":43.89143,"lon":11.01799},{"id":"d33","name":"EMILCAR Srl","address":"Via della Liberazione, n°110","city":"SAN BENEDETTO DEL TRONTO","province":"AP","region":"MARCHE","phone":"0735 76 07 41","lat":42.92952,"lon":13.88332},{"id":"d34","name":"EUROMIX MOTORS SpA","address":"Via 4 novembre, 93/1","city":"TRENTO","province":"TN","region":"TRENTINO A/A","phone":"0461 95 00 75","lat":46.09996,"lon":11.11291},{"id":"d35","name":"FERRARI GIORGIO SpA","address":"Via Curtatona 12 - Loc. Fossalta","city":"MODENA","province":"MO","region":"EMILIA ROMAGNA","phone":"059 36 51 40","lat":44.62428,"lon":10.97791},{"id":"d36","name":"GALLUCCIO ANGELO Srl","address":"Via San Colombano, 61","city":"LODI","province":"LO","region":"LOMBARDIA","phone":"0371 30 755","lat":45.30201,"lon":9.50228},{"id":"d37","name":"GIDAUTO Srl","address":"Via Roma, 147/c","city":"VILLORBA","province":"TV","region":"VENETO","phone":"0422 91 01 19","lat":45.72517,"lon":12.25377},{"id":"d38","name":"GIDAUTO Srl","address":"Via Tiziano Vecellio, 14","city":"BELLUNO","province":"BL","region":"VENETO","phone":"0437 30696","lat":46.15624,"lon":12.23469},{"id":"d39","name":"GLM SpA","address":"Via Bacco, 6","city":"ELMAS","province":"CA","region":"SARDEGNA","phone":"070 24 07 07","lat":39.25545,"lon":9.07016},{"id":"d40","name":"I.W.R. ITAL WAGEN ROMA Srl","address":"Via della Magliana, 297","city":"ROMA","province":"RM","region":"LAZIO","phone":"06 55 19 51","lat":41.84232,"lon":12.45545},{"id":"d41","name":"INTERNATIONAL MOTORS Srl","address":"Via Curzio Malaparte ,10","city":"FIRENZE","province":"FI","region":"TOSCANA","phone":"055 37 93 801","lat":43.7982,"lon":11.16877},{"id":"d42","name":"IPERAUTO BERGAMO SpA","address":"Via Borgo Palazzo, 205","city":"BERGAMO","province":"BG","region":"LOMBARDIA","phone":"035 29 24 211","lat":45.69282,"lon":9.6945},{"id":"d43","name":"J.B. CARS Srl","address":"Via Azzone Visconti, 15/a","city":"MONZA","province":"MB","region":"LOMBARDIA","phone":"039 38 96 14","lat":45.58101,"lon":9.27701},{"id":"d44","name":"LARIO MI AUTO Srl","address":"Via Roma, 110","city":"PESCATE","province":"LC","region":"LOMBARDIA","phone":"0341 36 54 67","lat":45.82964,"lon":9.3958},{"id":"d45","name":"LARIO MI AUTO Srl","address":"Via Lario, 34","city":"MILANO","province":"MI","region":"LOMBARDIA","phone":"02 68 82 68 40","lat":45.49431,"lon":9.19133},{"id":"d46","name":"LARIO MI AUTO Srl","address":"Via Mecenate, 77","city":"MILANO","province":"MI","region":"LOMBARDIA","phone":"02 50 99 57 50","lat":45.453,"lon":9.24811},{"id":"d47","name":"LARIO MI AUTO Srl","address":"Via Petitti, 8","city":"MILANO","province":"MI","region":"LOMBARDIA","phone":"02 36 93 16 36","lat":45.4886,"lon":9.15263},{"id":"d48","name":"NUOVA SPORT CAR SpA","address":"Via delle Industrie, 77","city":"ISOLA DELLE FEMMINE","province":"PA","region":"SICILIA","phone":"091 63 72 245","lat":38.19378,"lon":13.25214},{"id":"d49","name":"PDM Srl","address":"Via San Leonardo, 51","city":"SALERNO","province":"SA","region":"CAMPANIA","phone":"089 33 08 20","lat":40.65195,"lon":14.82064},{"id":"d50","name":"PERAGNOLI AUTO Srl","address":"Via Cassia Nord, 112","city":"MONTERIGGIONI","province":"SI","region":"TOSCANA","phone":"0577 31 83 03","lat":43.38314,"lon":11.2397},{"id":"d51","name":"PROGETTO AUTO Srl","address":"Via Amendola, 208","city":"S.GIOVANNI TEATINO","province":"CH","region":"ABRUZZO","phone":"085 94 63 207","lat":42.43212,"lon":14.19078},{"id":"d52","name":"QUEEN LAND Srl","address":"Via di Francia, 13","city":"GENOVA","province":"GE","region":"LIGURIA","phone":"010 53 10 21","lat":44.41008,"lon":8.90444},{"id":"d53","name":"RADICCI AUTOMOBILI SpA","address":"Via G. Amendola, 152G","city":"BARI","province":"BA","region":"PUGLIA","phone":"080 55 30 077","lat":41.10809,"lon":16.88515},{"id":"d54","name":"RIVERAUTO Srl","address":"Via Pian di Rona, 128/C","city":"REGGELLO","province":"FI","region":"TOSCANA","phone":"055 86 32 13","lat":43.63963,"lon":11.46719},{"id":"d55","name":"ROMAGNAUTO Srl","address":"Via Ravegnana, 403","city":"FORLI'","province":"FC","region":"EMILIA ROMAGNA","phone":"0543 72 33 03","lat":44.26644,"lon":12.0792},{"id":"d56","name":"SCHIATTI CLASS Srl","address":"Via Cipriani, 6","city":"REGGIO EMILIA","province":"RE","region":"EMILIA ROMAGNA","phone":"0522 38 35 35","lat":44.71298,"lon":10.59937},{"id":"d57","name":"SERGIO TUMINO SpA","address":"S.P. 25, Km. 3,3 - C.da Cimillà","city":"RAGUSA","province":"RG","region":"SICILIA","phone":"0932 185 08 69","lat":36.88312,"lon":14.6792},{"id":"d58","name":"SOLUZIONE SpA","address":"Strada Biandrate, 61","city":"NOVARA","province":"NO","region":"PIEMONTE","phone":"0321 62 86 90","lat":45.44941,"lon":8.59084},{"id":"d59","name":"SUN CAR SpA","address":"Via Sarzanese Nord 6648 Piano di Mommio","city":"MASSAROSA","province":"LU","region":"TOSCANA","phone":"0584 99 71 97","lat":43.90654,"lon":10.27665},{"id":"d60","name":"SVA DAKAR Srl","address":"Via Trieste, 235","city":"RAVENNA","province":"RA","region":"EMILIA ROMAGNA","phone":"0544 289301","lat":44.42542,"lon":12.22882},{"id":"d61","name":"UNICAR SpA","address":"Corso Asti, 24/m","city":"ALBA","province":"CN","region":"PIEMONTE","phone":"0173 31 17 11","lat":44.715,"lon":8.0321},{"id":"d62","name":"VERNOCCHI.ZERO Srl","address":"Strada della Romagna, 155","city":"PESARO","province":"PU","region":"MARCHE","phone":"0721 27 520","lat":43.91247,"lon":12.91554},{"id":"d63","name":"X CLASS Srl","address":"Via Monti Lepini Km 6+600","city":"CECCANO","province":"FR","region":"LAZIO","phone":"0775 18 86 430","lat":41.5684,"lon":13.33356},{"id":"d64","name":"Clerici Auto","address":"Via Ezio Vanoni, 58","city":"Castione Andevenno","province":"SO","region":"Lombardia","phone":"0342 358261","lat":46.1723,"lon":9.7982}];
+
+// --- SETTINGS ---
+const STORAGE_KEY = "dealer_visits_v1";
+const SHARED_FILENAME = "visite.json";
+
+// --- HELPERS ---
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
+function norm(s){
+  return String(s ?? "")
+    .toLowerCase()
+    .normalize('NFD').replace(/\p{Diacritic}/gu,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function todayMidnight(){
+  const d = new Date(); d.setHours(0,0,0,0); return d;
+}
+function uid(){
+  return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+}
+function parseVisitDate(v){
+  const d = new Date(v.date + (v.time ? ("T"+v.time) : "T00:00"));
+  if (isNaN(d)) return null;
+  return d;
+}
+
+// --- CONDIVISIONE (File System Access + IndexedDB) ---
+function hasFileSystemAccess() {
+  return !!(window.showDirectoryPicker && window.FileSystemHandle);
+}
+const idb = {
+  db: null,
+  async open() {
+    if (this.db) return this.db;
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open("dealer-visits-shared", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("kv");
+      req.onsuccess = () => { this.db = req.result; resolve(this.db); };
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async get(key) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("kv", "readonly");
+      const req = tx.objectStore("kv").get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async set(key, val) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("kv", "readwrite");
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+      tx.objectStore("kv").put(val, key);
+    });
+  },
+  async del(key) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("kv", "readwrite");
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+      tx.objectStore("kv").delete(key);
+    });
+  }
+};
+const shared = { enabled:false, dirHandle:null, fileHandle:null };
+async function ensurePermission(handle, mode="readwrite") {
+  if (!handle) return false;
+  const opts = { mode };
+  if (handle.queryPermission) {
+    const q = await handle.queryPermission(opts);
+    if (q === "granted") return true;
+  }
+  if (handle.requestPermission) {
+    const r = await handle.requestPermission(opts);
+    return r === "granted";
+  }
+  return true;
+}
+async function readSharedVisits() {
+  if (!shared.enabled || !shared.fileHandle) return null;
+  const file = await shared.fileHandle.getFile();
+  const txt = await file.text();
+  if (!txt.trim()) return [];
+  const data = JSON.parse(txt);
+  return Array.isArray(data) ? data : [];
+}
+async function writeSharedVisits(visits) {
+  if (!shared.enabled || !shared.fileHandle) return;
+  const writable = await shared.fileHandle.createWritable();
+  await writable.write(JSON.stringify(visits, null, 2));
+  await writable.close();
+}
+function setSharedStatus(modeText, detailsHtml="") {
+  const el = document.getElementById("sharedStatus");
+  if (!el) return;
+  el.innerHTML = `Modalità: <b>${modeText}</b>${detailsHtml ? " — " + detailsHtml : ""}`;
+}
+
+// --- DATA: conteggi per CITTA' ---
+let cityCounts = new Map(); // key -> total
+function cityKey(city, prov) {
+  const c = norm(city);
+  const p = norm(prov);
+  return `${c}||${p}`;
+}
+function recalcCityCounts(visits) {
+  const counts = new Map();
+  for (const v of visits) {
+    const dealer = DEALERS.find(x => x.id === v.dealerId);
+    if (!dealer) continue;
+    const key = cityKey(dealer.city, dealer.province);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  cityCounts = counts;
+}
+function totalVisitsForCityKey(key) {
+  return cityCounts.get(key) || 0;
+}
+
+// --- MAP ---
+const map = L.map('map', { zoomControl:true }).setView([42.7, 12.6], 6);
+const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '© OpenStreetMap'
+});
+tiles.addTo(map);
+// --- Confini Regioni Italia (linee blu) ---
+fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
+  .then(r => r.json())
+  .then(geo => {
+    L.geoJSON(geo, {
+      style: {
+        color: '#2b7cff',
+        weight: 2,
+        opacity: 0.9,
+        fillOpacity: 0
+      },
+      interactive:false
+    }).addTo(map);
+  })
+  .catch(()=>console.warn("Impossibile caricare confini regioni"));
+
+
+const markerLayer = L.layerGroup().addTo(map);
+const countEl = document.getElementById('count');
+
+let markers = [];
+let onlyViewMode = false;
+
+const regSel = document.getElementById('reg');
+const provSel = document.getElementById('prov');
+const qInp = document.getElementById('q');
+const onlyViewBtn = document.getElementById('onlyViewBtn');
+const bordersBtn = document.getElementById('bordersBtn');
+
+bordersBtn.addEventListener('click', () => {
+  alert("Confini regioni non inclusi in questa build (manca il file geojson).");
+});
+
+function uniqueSorted(arr) {
+  return Array.from(new Set(arr.filter(Boolean))).sort((a,b)=>a.localeCompare(b,'it'));
+}
+function refreshProvinceOptions(selectedRegion) {
+  const provs = uniqueSorted(DEALERS
+    .filter(d => !selectedRegion || String(d.region).trim() === selectedRegion)
+    .map(d => String(d.province).trim())
+  );
+  const current = provSel.value;
+  provSel.innerHTML = '<option value="">Tutte</option>' + provs.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  if (provs.includes(current)) provSel.value = current;
+}
+function initFilters() {
+  const regs = uniqueSorted(DEALERS.map(d => String(d.region).trim()));
+  regSel.innerHTML = '<option value="">Tutte</option>' + regs.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  refreshProvinceOptions('');
+}
+function passesFilters(d) {
+  const q = qInp.value.trim().toLowerCase();
+  const reg = regSel.value;
+  const prov = provSel.value;
+
+  if (reg && String(d.region).trim() !== reg) return false;
+  if (prov && String(d.province).trim() !== prov) return false;
+
+  if (q) {
+    const hay = `${d.name} ${d.city} ${d.address}`.toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  if (onlyViewMode) {
+    const b = map.getBounds();
+    if (!b.contains([d.lat, d.lon])) return false;
+  }
+  return true;
+}
+
+function markerStyleForDealer(d){
+  const key = cityKey(d.city, d.province);
+  const total = totalVisitsForCityKey(key);
+
+  let fill = '#9aa0a6'; // 0 grigio
+  let radius = 7;
+
+  if (total === 1) {
+    fill = '#66bb6a'; radius = 8;
+  } else if (total === 2) {
+    fill = '#f6e58d'; radius = 9;
+  } else if (total === 3) {
+    fill = '#f8c291'; radius = 10;
+  } else if (total > 3) {
+    fill = '#e55039'; radius = 11;
+  }
+
+  return {
+    radius,
+    color: 'rgba(255,255,255,.9)',
+    weight: 2,
+    fillColor: fill,
+    fillOpacity: 0.85
+  };
+}
+
+function buildPopup(d) {
+  return `
+    <div class="popup-title">${esc(d.name)}</div>
+    <div>${esc(d.address)}</div>
+    <div class="small">${esc(d.city)} (${esc(d.province)}) — ${esc(d.region)}</div>
+    ${d.phone ? `<div class="small">☎ ${esc(d.phone)}</div>` : ''}
+    <div style="margin-top:10px;">
+      <button class="primary" onclick="window.planVisit('${esc(d.id)}')">Pianifica visita</button>
+    </div>
+  `;
+}
+
+function renderMarkers(fit=true) {
+  markerLayer.clearLayers();
+  markers = [];
+  const bounds = L.latLngBounds([]);
+  let shown = 0;
+
+  DEALERS.forEach(d => {
+    if (!passesFilters(d)) return;
+    const m = L.circleMarker([d.lat, d.lon], markerStyleForDealer(d))
+      .addTo(markerLayer)
+      .bindPopup(buildPopup(d));
+    m._dealer = d;
+    markers.push(m);
+    bounds.extend(m.getLatLng());
+    shown++;
+  });
+
+  countEl.textContent = shown;
+  if (fit && shown > 0 && !onlyViewMode) {
+    map.fitBounds(bounds.pad(0.10), {maxZoom: 12});
+  }
+}
+
+onlyViewBtn.addEventListener('click', () => {
+  onlyViewMode = !onlyViewMode;
+  onlyViewBtn.textContent = "Solo in vista: " + (onlyViewMode ? "ON" : "OFF");
+  renderMarkers(false);
+});
+
+regSel.addEventListener('change', () => {
+  refreshProvinceOptions(regSel.value);
+  renderMarkers(false);
+});
+provSel.addEventListener('change', ()=>renderMarkers(false));
+qInp.addEventListener('input', () => {
+  window.clearTimeout(window.__t);
+  window.__t = window.setTimeout(()=>renderMarkers(false), 150);
+});
+
+// --- VISITS: storage + UI ---
+function loadVisits() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const v = raw ? JSON.parse(raw) : [];
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function saveVisits(visits) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+  if (shared.enabled) {
+    writeSharedVisits(visits).catch(()=>{});
+  }
+}
+function addVisit(vis) {
+  const visits = loadVisits();
+  visits.push(vis);
+  saveVisits(visits);
+  syncVisitsUI();
+}
+function removeVisit(id) {
+  const visits = loadVisits().filter(v => v.id !== id);
+  saveVisits(visits);
+  syncVisitsUI();
+}
+function clearVisits() {
+  localStorage.removeItem(STORAGE_KEY);
+  if (shared.enabled) writeSharedVisits([]).catch(()=>{});
+  syncVisitsUI();
+}
+
+const dealersList = document.getElementById('dealersList');
+const dealerPick = document.getElementById('dealerPick');
+const visitDate = document.getElementById('visitDate');
+const visitTime = document.getElementById('visitTime');
+const visitNote = document.getElementById('visitNote');
+const addVisitBtn = document.getElementById('addVisitBtn');
+const visitsList = document.getElementById('visitsList');
+const visitStats = document.getElementById('visitStats');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
+const importFile = document.getElementById('importFile');
+const clearVisitsBtn = document.getElementById('clearVisitsBtn');
+
+function dealerLabel(d) {
+  return `${d.name} — ${d.city} (${d.province})`;
+}
+function findDealerByLabel(label) {
+  const n = norm(label);
+  for (const d of DEALERS) {
+    if (norm(dealerLabel(d)) === n) return d;
+  }
+  for (const d of DEALERS) {
+    if (norm(d.name) === n) return d;
+  }
+  return null;
+}
+function fillDealersList() {
+  dealersList.innerHTML = DEALERS
+    .slice()
+    .sort((a,b)=>dealerLabel(a).localeCompare(dealerLabel(b),'it'))
+    .map(d => `<option value="${esc(dealerLabel(d))}"></option>`)
+    .join('');
+}
+fillDealersList();
+
+function fmtDate(dStr, tStr) {
+  if (!dStr) return '';
+  return tStr ? `${dStr} ${tStr}` : dStr;
+}
+
+function syncVisitsUI() {
+  const visits = loadVisits();
+  visits.sort((a,b)=> (a.date + (a.time||"")).localeCompare(b.date + (b.time||"")));
+
+  visitStats.innerHTML = `Totale visite: <b>${visits.length}</b>`;
+
+  visitsList.innerHTML = visits.map(v => {
+    const when = fmtDate(v.date, v.time);
+    return `
+      <div class="visit-item">
+        <div class="visit-top">
+          <div>
+            <div class="visit-title">${esc(v.dealerName || "")}</div>
+            <div class="small">${esc(when)} — ${esc(v.region || "")}</div>
+            ${v.note ? `<div class="small" style="margin-top:6px;">${esc(v.note)}</div>` : ''}
+            <div class="chip">Visita</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button onclick="window.editVisit('${esc(v.id)}')">✏️ Modifica</button>
+            <button class="danger" onclick="window.deleteVisit('${esc(v.id)}')">Elimina</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('') || '<div class="small">Nessuna visita salvata.</div>';
+
+  recalcCityCounts(visits);
+  // update marker styles
+  markers.forEach(m => { if (m._dealer) m.setStyle(markerStyleForDealer(m._dealer)); });
+  renderDashboard();
+}
+
+window.deleteVisit = (id) => removeVisit(id);
+window.editVisit = (id) => {
+  const visits = loadVisits();
+  const v = visits.find(x => x.id === id);
+  if (!v) return;
+
+  activateTab('visits');
+  const dealer = DEALERS.find(d => d.id === v.dealerId);
+  dealerPick.value = dealer ? dealerLabel(dealer) : (v.dealerName || "");
+  visitDate.value = v.date || "";
+  visitTime.value = v.time || "";
+  visitNote.value = v.note || "";
+  removeVisit(id);
+};
+
+addVisitBtn.addEventListener('click', () => {
+  const label = dealerPick.value.trim();
+  const d = findDealerByLabel(label);
+  if (!d) { alert("Seleziona un concessionario valido dalla lista."); return; }
+  if (!visitDate.value) { alert("Seleziona una data."); return; }
+
+  addVisit({
+    id: uid(),
+    dealerId: d.id,
+    dealerName: d.name,
+    region: d.region,
+    date: visitDate.value,
+    time: visitTime.value || "",
+    note: visitNote.value || ""
+  });
+
+  visitTime.value = "";
+  visitNote.value = "";
+});
+
+clearVisitsBtn.addEventListener('click', () => {
+  if (confirm("Sicuro di voler cancellare tutte le visite?")) clearVisits();
+});
+
+exportBtn.addEventListener('click', () => {
+  const visits = loadVisits();
+  const blob = new Blob([JSON.stringify(visits, null, 2)], {type:"application/json"});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = "visite_concessionari_backup.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+importBtn.addEventListener('click', () => importFile.click());
+importFile.addEventListener('change', async () => {
+  const file = importFile.files?.[0];
+  if (!file) return;
+  try {
+    const txt = await file.text();
+    const data = JSON.parse(txt);
+    if (!Array.isArray(data)) throw new Error("Formato non valido");
+    const cleaned = data.filter(v => v && v.id && v.dealerId && v.date);
+    saveVisits(cleaned);
+    syncVisitsUI();
+    alert("Import completato.");
+  } catch (e) {
+    alert("Impossibile importare: " + (e?.message || e));
+  } finally {
+    importFile.value = "";
+  }
+});
+
+// Plan visit from popup
+window.planVisit = (dealerId) => {
+  const d = DEALERS.find(x => x.id === dealerId);
+  if (!d) return;
+  activateTab('visits');
+  dealerPick.value = dealerLabel(d);
+  const dt = todayMidnight();
+  dt.setDate(dt.getDate() + 7);
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth()+1).padStart(2,'0');
+  const dd = String(dt.getDate()).padStart(2,'0');
+  visitDate.value = `${yyyy}-${mm}-${dd}`;
+  visitTime.focus();
+};
+
+// Tabs
+const tabMap = document.getElementById('tabMap');
+const tabVisits = document.getElementById('tabVisits');
+const panelMap = document.getElementById('panelMap');
+const panelVisits = document.getElementById('panelVisits');
+function activateTab(which) {
+  const isMap = which === 'map';
+  tabMap.classList.toggle('active', isMap);
+  tabVisits.classList.toggle('active', !isMap);
+  panelMap.style.display = isMap ? '' : 'none';
+  panelVisits.style.display = isMap ? 'none' : '';
+}
+tabMap.addEventListener('click', ()=>activateTab('map'));
+tabVisits.addEventListener('click', ()=>activateTab('visits'));
+
+// Dashboard
+const cityIndex = (() => {
+  const idx = new Map(); // key -> {city, province, region, dealers:[]}
+  for (const d of DEALERS) {
+    const key = cityKey(d.city, d.province);
+    if (!key) continue;
+    const cur = idx.get(key) || {city:d.city, province:d.province, region:d.region, dealers:[]};
+    cur.dealers.push(d);
+    idx.set(key, cur);
+  }
+  return idx;
+})();
+
+function renderDashboard() {
+  const topEl = document.getElementById('topVisited');
+  const toEl  = document.getElementById('toVisit');
+  if (!topEl || !toEl) return;
+
+  const rows = [];
+  cityIndex.forEach((v, key) => {
+    rows.push({
+      key,
+      city: v.city,
+      province: v.province,
+      region: v.region,
+      total: totalVisitsForCityKey(key),
+      nDealers: v.dealers.length
+    });
+  });
+
+  const top = rows.filter(r => r.total > 0)
+    .sort((a,b)=> b.total - a.total || (a.city+a.province).localeCompare(b.city+b.province,'it'))
+    .slice(0, 10);
+
+  const toVisit = rows.filter(r => r.total === 0)
+    .sort((a,b)=> (a.region||'').localeCompare(b.region||'','it') || (a.city+a.province).localeCompare(b.city+b.province,'it'))
+    .slice(0, 10);
+
+  function itemHtml(r) {
+    const title = `${r.city} (${r.province})`;
+    const meta = `${r.region || ''} • ${r.nDealers} conc.`;
+    return `
+      <div class="dashitem" onclick="window.focusCity('${esc(r.key)}')">
+        <div style="min-width:0;">
+          <div class="dashname">${esc(title)}</div>
+          <div class="dashmeta">${esc(meta)}</div>
+        </div>
+        <div class="dashcount">${r.total}</div>
+      </div>
+    `;
+  }
+
+  topEl.innerHTML = top.length ? top.map(itemHtml).join('') : '<div class="small">Nessuna visita ancora.</div>';
+  toEl.innerHTML  = toVisit.length ? toVisit.map(itemHtml).join('') : '<div class="small">Ottimo: non ci sono città a zero visite.</div>';
+}
+
+window.focusCity = (key) => {
+  const entry = cityIndex.get(key);
+  if (!entry) return;
+  // Fit bounds on markers in that city
+  const b = L.latLngBounds([]);
+  const cityMarkers = markers.filter(m => m._dealer && cityKey(m._dealer.city, m._dealer.province) === key);
+  cityMarkers.forEach(m => b.extend(m.getLatLng()));
+  if (b.isValid()) {
+    map.fitBounds(b.pad(0.25), {maxZoom: 13});
+    const first = cityMarkers[0];
+    if (first) first.openPopup();
+  }
+};
+
+// Shared connect
+const connectSharedBtn = document.getElementById('connectSharedBtn');
+const disconnectSharedBtn = document.getElementById('disconnectSharedBtn');
+
+async function connectShared() {
+  if (!hasFileSystemAccess()) {
+    alert("Il tuo browser non supporta la condivisione diretta su file. Consiglio: Chrome o Edge. In alternativa usa Esporta/Importa.");
+    return;
+  }
+  try {
+    const dir = await window.showDirectoryPicker();
+    const ok = await ensurePermission(dir, "readwrite");
+    if (!ok) { alert("Permesso negato sulla cartella."); return; }
+
+    const fh = await dir.getFileHandle(SHARED_FILENAME, { create: true });
+    const ok2 = await ensurePermission(fh, "readwrite");
+    if (!ok2) { alert("Permesso negato sul file visite.json."); return; }
+
+    shared.dirHandle = dir;
+    shared.fileHandle = fh;
+    shared.enabled = true;
+
+    await idb.set("dirHandle", dir);
+
+    let visits = [];
+    try { visits = await readSharedVisits(); } catch { visits = []; }
+    if (!Array.isArray(visits)) visits = [];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+
+    setSharedStatus("Condivisa", `<code>${SHARED_FILENAME}</code> (cartella selezionata)`);
+    connectSharedBtn.style.display = "none";
+    disconnectSharedBtn.style.display = "";
+
+    syncVisitsUI();
+    alert("Connesso! Ora le visite sono condivise tramite visite.json nella cartella scelta.");
+  } catch (e) {
+    // user cancelled
+  }
+}
+
+async function disconnectShared() {
+  shared.enabled = false;
+  shared.dirHandle = null;
+  shared.fileHandle = null;
+  await idb.del("dirHandle");
+  setSharedStatus("Locale", "(le visite restano in questo browser)");
+  connectSharedBtn.style.display = "";
+  disconnectSharedBtn.style.display = "none";
+}
+
+if (connectSharedBtn) connectSharedBtn.addEventListener('click', connectShared);
+if (disconnectSharedBtn) disconnectSharedBtn.addEventListener('click', disconnectShared);
+
+(async function restoreSharedIfPossible(){
+  if (!hasFileSystemAccess()) return;
+  try {
+    const dir = await idb.get("dirHandle");
+    if (!dir) return;
+    const ok = await ensurePermission(dir, "readwrite");
+    if (!ok) return;
+
+    const fh = await dir.getFileHandle(SHARED_FILENAME, { create: true });
+    const ok2 = await ensurePermission(fh, "readwrite");
+    if (!ok2) return;
+
+    shared.dirHandle = dir;
+    shared.fileHandle = fh;
+    shared.enabled = true;
+
+    let visits = [];
+    try { visits = await readSharedVisits(); } catch { visits = []; }
+    if (!Array.isArray(visits)) visits = [];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
+
+    setSharedStatus("Condivisa", `<code>${SHARED_FILENAME}</code> (ripristinata)`);
+    if (connectSharedBtn) connectSharedBtn.style.display = "none";
+    if (disconnectSharedBtn) disconnectSharedBtn.style.display = "";
+
+    syncVisitsUI();
+  } catch {}
+})();
+
+// Init
+initFilters();
+recalcCityCounts(loadVisits());
+renderMarkers(false);
+renderDashboard();
+syncVisitsUI();
+
+// Fit all at start
+if (DEALERS.length) {
+  const all = L.latLngBounds(DEALERS.map(d => [d.lat,d.lon]));
+  map.fitBounds(all.pad(0.08));
+}
+</script>
+
+<script>
+(function(){
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+  });
+})();
+</script>
+
+</body>
+</html>
