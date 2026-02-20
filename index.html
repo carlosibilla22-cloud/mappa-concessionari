@@ -64,7 +64,6 @@ button.danger:hover{background:rgba(229,80,57,.28);}
 <meta name="theme-color" content="#2b7cff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Concessionari">
 
 </head>
 <body>
@@ -843,17 +842,8 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
       const reg = await navigator.serviceWorker.register("./service-worker.js");
-
-      // iOS a volte è pigro: forziamo check ad ogni apertura
       reg.update();
-
-      // se arriva un aggiornamento, ricarica (così vedi subito la nuova versione)
-      navigator.serviceWorker.addEventListener("message", (event) => {
-        if (event.data && (event.data.type === "SW_ACTIVE")) {
-          // niente: solo handshake
-        }
-      });
-    } catch (e) {}
+    } catch(e){}
   });
 }
 </script>
